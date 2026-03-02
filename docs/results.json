@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-02 15:17:22",
+  "keywords": [],
+  "school_count": 14,
+  "total_fetched": 831,
+  "after_date_filter": 429,
+  "keyword_matched": 0,
+  "new_announcements": [],
+  "all_matched": [],
+  "notify_results": {},
+  "status": "success",
+  "message": "本次沒有匹配到羽球場地相關公告",
+  "dry_run": false,
+  "force": true
+}
