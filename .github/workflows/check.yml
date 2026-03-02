@@ -1,0 +1,108 @@
+name: 🏸 羽球場地公告監控
+
+on:
+  # 每天台北時間中午 12:00（UTC 04:00）自動執行一次
+  schedule:
+    - cron: '0 4 * * *'
+
+  # 也可以手動觸發
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '乾跑模式（不發送通知）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      force:
+        description: '強制模式（忽略已通知紀錄）'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+# 確保同時間只有一個執行中的工作流程
+concurrency:
+  group: badminton-checker
+  cancel-in-progress: true
+
+# 需要寫入權限以更新 GitHub Pages 結果
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  check-announcements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout 程式碼
+        uses: actions/checkout@v4
+
+      - name: 🐍 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 📦 安裝依賴
+        run: pip install -r requirements.txt
+
+      - name: 🔄 載入已通知紀錄快取
+        uses: actions/cache@v4
+        with:
+          path: data/notified.json
+          # 用日期作為 key 的一部分，每天重新整理一次快取
+          key: notified-${{ hashFiles('data/notified.json') }}-${{ github.run_id }}
+          restore-keys: |
+            notified-
+
+      - name: 🏸 執行公告檢查
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EMAIL_ENABLED: ${{ secrets.EMAIL_ENABLED }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVER: ${{ secrets.EMAIL_RECEIVER }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+          python main.py $ARGS
+
+      - name: 📊 生成 GitHub Pages 結果
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          KEYWORDS: ${{ secrets.KEYWORDS }}
+        run: python generate_results.py
+
+      - name: 🌐 更新 GitHub Pages
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/results.json
+          git diff --staged --quiet || git commit -m "📊 更新檢查結果 $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
+
+      - name: 💾 保存通知紀錄
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notified-records
+          path: data/notified.json
+          retention-days: 30
+          if-no-files-found: ignore

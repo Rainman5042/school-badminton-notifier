@@ -1,0 +1,26 @@
+# Environment
+.env
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (不追蹤歷史紀錄，避免衝突)
+# data/notified.json 會由 GitHub Actions 自動管理
