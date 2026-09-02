@@ -1,6 +1,6 @@
 # 🏸 學校羽球場地公告監控機器人
 
-自動爬取指定台北市學校的最新公告，當公告標題中包含「場地」、「租用」、「羽球」等關鍵字時，自動發送 Discord 或 Email 通知。
+自動爬取指定台北市學校的最新公告，當公告標題中包含「場地」、「租用」、「羽球」等關鍵字時，自動發送 Discord、Email 或 Teams 通知。
 
 ## ✨ 功能特色
 
@@ -9,9 +9,9 @@
 - 🎯 **關鍵字過濾** - 可自由設定監控的關鍵字
 - 💬 **Discord 通知** - 精美的 Embed 格式推送
 - 📧 **Email 通知** - HTML 格式的美觀郵件
-- ⏰ **定時排程** - 使用 GitHub Actions 每 30 分鐘自動檢查
+- 👥 **Teams 通知** - 透過 Power Automate Workflows Webhook 推送 Adaptive Card，多則公告會彙整成一張卡片，不洗版
+- ⏰ **定時排程** - 透過本地 Docker + crontab 排程執行（詳見「本地 Docker + crontab 部署」）
 - 💾 **去重機制** - 不會重複通知相同的公告
-- 🆓 **完全免費** - 使用 GitHub Actions 免費額度運行
 
 ## 🏫 監控學校
 
@@ -36,7 +36,25 @@
    - Name: `DISCORD_WEBHOOK_URL`
    - Value: 你的 Webhook URL
 
-### 3️⃣ （可選）設定 Email 通知
+### 3️⃣ （可選）設定 Teams Webhook
+
+微軟已於 2025 年底前逐步淘汰舊版 Office 365 Connector（Teams 頻道內建的 Incoming Webhook），目前建立 Teams webhook 的官方作法是透過 **Power Automate**：
+
+1. 到 [Power Automate](https://make.powerautomate.com/) 建立一個新的雲端流程
+2. 觸發器選擇 **「When a Teams webhook request is received」**
+3. 動作選擇 **「Post card in a chat or channel」**，選擇要發送到的頻道，Adaptive Card 內容留給程式送入
+4. 儲存後，複製觸發器產生的 HTTP POST URL
+5. 設定環境變數 `TEAMS_WEBHOOK_URL`（本地 `.env`，或 GitHub Repo 的 Secret，用於 `workflow_dispatch` 手動測試）
+
+> ⚠️ **常見錯誤**：若「Post card in a chat or channel」動作失敗並顯示 `Call made for a thread which is not a ChatThread`，代表「張貼於 (Post in)」設定的目標 ID 不是有效的 Chat 資源（常見於誤用頻道 ID 當作 Group chat ID）。最保險的排查/測試方式是把「張貼於」改成 **「與 Flow bot 聊天 (Chat with Flow bot)」**，「收件者 (Recipient)」直接填自己的 email，完全不需要任何 ID；正式要發頻道時，「張貼於」選 **「頻道 (Channel)」**，用下拉選單選 Team/Channel，不要手動貼 ID。
+
+建好 webhook 後，可以用下面這支腳本快速驗證（繞過爬蟲/關鍵字比對，直接送出測試卡片，且一次送三筆測試資料驗證多筆彙整成一張卡片的效果）：
+
+```bash
+docker compose run --rm --entrypoint python notifier test_teams_webhook.py
+```
+
+### 4️⃣ （可選）設定 Email 通知
 
 到 GitHub Repo **Settings** → **Secrets and variables** → **Actions**，新增以下 Secrets：
 
@@ -49,17 +67,15 @@
 | `EMAIL_PASSWORD` | Gmail 應用程式密碼（[如何取得？](https://support.google.com/accounts/answer/185833)） |
 | `EMAIL_RECEIVER` | 接收通知的信箱 |
 
-### 4️⃣ 自訂關鍵字（可選）
+### 5️⃣ 自訂關鍵字（可選）
 
 新增 Secret：
 - Name: `KEYWORDS`
 - Value: `場地,租用,羽球,羽毛球,球場,體育館租借,活動中心`
 
-### 5️⃣ 啟用 GitHub Actions
+### 6️⃣ 部署排程
 
-到 Repo 的 **Actions** 頁面 → 點擊 **I understand my workflows, go ahead and enable them**
-
-完成！機器人會每 30 分鐘自動檢查一次 🎉
+排程執行已改由本地 Docker + crontab 負責（詳見下方「🐳 本地 Docker + crontab 部署」），GitHub Actions 只保留 `workflow_dispatch` 供手動測試，不會自動排程執行。
 
 ## 🖥️ 本地開發
 
@@ -90,22 +106,61 @@ python main.py
 python main.py --force
 ```
 
+## 🐳 本地 Docker + crontab 部署
+
+排程已從 GitHub Actions 的 `schedule` 觸發改為本地伺服器的 Docker + crontab，`data/`（去重紀錄）與 `docs/`（儀表板結果）以 volume 掛載，`.env` 內的密鑰不會寫進 image。
+
+```bash
+# 建立 .env（同「本地開發」章節）
+cp .env.example .env
+
+# 建置 image
+docker compose build
+
+# 手動測試（乾跑模式）
+docker compose run --rm notifier --dry-run
+
+# 手動測試（正式發送）
+docker compose run --rm notifier
+```
+
+排程請在本地伺服器的 crontab 加入一行，指向 `scripts/cron_run.sh`（會依序執行 `main.py`、`generate_results.py`，並在 `docs/results.json` 有變動時用主機既有的 git 設定 commit + push 更新 GitHub Pages 儀表板）：
+
+```bash
+crontab -e
+```
+
+```cron
+# 每天台北時間中午 12:00 執行一次（主機時區若非 Asia/Taipei 請自行換算）
+0 12 * * * /path/to/school-badminton-notifier/scripts/cron_run.sh >> /path/to/school-badminton-notifier/logs/cron.log 2>&1
+```
+
+> 需先確認本地伺服器已能以既有的 git 帳號/憑證對此 repo 執行 `git push`（`cron_run.sh` 不在容器內處理 git 憑證）。
+
 ## 📁 專案結構
 
 ```
 school-badminton-notifier/
 ├── .github/
 │   └── workflows/
-│       └── check.yml          # GitHub Actions 排程設定
+│       └── check.yml          # GitHub Actions 設定（僅 workflow_dispatch 手動測試）
+├── scripts/
+│   └── cron_run.sh            # 本地 crontab 進入點
 ├── data/
 │   └── notified.json          # 已通知紀錄（自動產生）
+├── docs/
+│   └── results.json           # GitHub Pages 儀表板資料（自動產生）
+├── Dockerfile                  # 容器化設定
+├── docker-compose.yml          # 本地部署用 compose 設定
+├── .dockerignore
 ├── .env.example               # 環境變數範本
 ├── .gitignore
 ├── config.py                  # 組態設定
 ├── main.py                    # 主程式入口
 ├── scrapers.py                # 爬蟲模組（支援 RSS/API/HTML）
-├── notifier.py                # 通知模組（Discord/Email）
+├── notifier.py                # 通知模組（Discord/Email/Teams）
 ├── storage.py                 # 去重紀錄儲存模組
+├── test_teams_webhook.py      # Teams webhook 手動測試腳本
 ├── requirements.txt           # Python 依賴
 └── README.md
 ```
@@ -132,28 +187,20 @@ school-badminton-notifier/
 | `ischool` | iSchool Widget | 使用 iSchool 系統的學校 |
 | `web_html` | 通用 HTML | 任何網頁（fallback） |
 
-## 📊 GitHub Actions 免費額度
-
-GitHub Actions 對公開 Repo **完全免費**，對私有 Repo 每月提供 **2,000 分鐘**的免費額度。
-
-此機器人每次執行約 1-2 分鐘，每天 48 次 = 約 **48-96 分鐘/天**，一個月約 **1,440-2,880 分鐘**。
-
-> 💡 **建議使用公開 Repo** 以享受無限免費額度，或調整 cron 為每小時一次（`0 * * * *`）以減少使用量。
-
 ## 🐛 常見問題
 
 ### Q: 為什麼沒有收到通知？
-1. 確認 Discord Webhook URL 是否正確
-2. 到 GitHub Actions 頁面查看執行結果和 log
-3. 用 `--dry-run` 模式測試是否能爬到公告
+1. 確認 Discord/Teams Webhook URL 是否正確
+2. Teams 通知可以用 `docker compose run --rm --entrypoint python notifier test_teams_webhook.py` 單獨測試，繞過爬蟲/關鍵字比對；若 HTTP 回應成功但 Teams 沒收到卡片，要到 Power Automate 該 flow 的「執行歷程記錄 (Run history)」查看實際錯誤（HTTP 200/202 只代表觸發程序有收到，不保證後續動作成功）
+3. 檢查本地 crontab 的 log（`scripts/cron_run.sh` 導出的檔案，例如 `logs/cron.log`），或手動用 `docker compose run --rm notifier` 查看即時輸出
+4. 用 `--dry-run` 模式測試是否能爬到公告
 
 ### Q: 如何修改檢查頻率？
-編輯 `.github/workflows/check.yml` 中的 cron 設定：
-```yaml
-schedule:
-  - cron: '0 * * * *'    # 每小時
-  - cron: '*/30 * * * *'  # 每 30 分鐘
-  - cron: '*/15 * * * *'  # 每 15 分鐘
+編輯本地伺服器 crontab 中呼叫 `scripts/cron_run.sh` 那一行的排程時間，例如：
+```cron
+0 * * * *      # 每小時
+*/30 * * * *   # 每 30 分鐘
+*/15 * * * *   # 每 15 分鐘
 ```
 
 ### Q: 學校網站改版了怎麼辦？

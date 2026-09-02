@@ -1,11 +1,8 @@
 name: 🏸 羽球場地公告監控
 
 on:
-  # 每天台北時間中午 12:00（UTC 04:00）自動執行一次
-  schedule:
-    - cron: '0 4 * * *'
-
-  # 也可以手動觸發
+  # 排程已改由本地 Docker + crontab 觸發（見 README「本地 Docker + crontab 部署」），
+  # 這裡只保留手動觸發，用於測試 / 臨時執行。
   workflow_dispatch:
     inputs:
       dry_run:
@@ -65,6 +62,7 @@ jobs:
       - name: 🏸 執行公告檢查
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           EMAIL_ENABLED: ${{ secrets.EMAIL_ENABLED }}
           SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

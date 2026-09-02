@@ -96,6 +96,9 @@ SCHOOLS = [
 # ========== Discord 設定 ==========
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 
+# ========== Teams 設定 ==========
+TEAMS_WEBHOOK_URL = os.getenv("TEAMS_WEBHOOK_URL", "")
+
 # ========== Email 設定 ==========
 EMAIL_ENABLED = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
