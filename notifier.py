@@ -1,5 +1,5 @@
 """
-通知模組 - 負責將匹配到的公告發送到 Discord 或 Email
+通知模組 - 負責將匹配到的公告發送到 Discord、Email 或 Teams
 """
 import json
 import logging
@@ -87,6 +87,100 @@ def send_discord(announcements: List[Dict]) -> bool:
     return True
 
 
+def send_teams(announcements: List[Dict]) -> bool:
+    """
+    透過 Microsoft Teams (Power Automate Workflows) Webhook 發送通知
+    所有公告彙整成單一張 Adaptive Card 一次送出，避免洗版
+    """
+    webhook_url = config.TEAMS_WEBHOOK_URL
+
+    if not webhook_url or "YOUR_WEBHOOK" in webhook_url:
+        logger.warning("Teams Webhook URL 未設定，跳過 Teams 通知")
+        return False
+
+    body = [
+        {
+            "type": "TextBlock",
+            "text": "🏸 羽球場地相關公告",
+            "weight": "Bolder",
+            "size": "Medium",
+        },
+        {
+            "type": "TextBlock",
+            "text": f"共 {len(announcements)} 則新公告",
+            "isSubtle": True,
+            "spacing": "None",
+        },
+    ]
+
+    for ann in announcements:
+        school = ann.get("school", "未知學校")
+        title = ann.get("title", "無標題")
+        url = ann.get("url", "")
+        keywords = ann.get("matched_keywords", [])
+
+        item = {
+            "type": "Container",
+            "separator": True,
+            "spacing": "Medium",
+            "items": [
+                {"type": "TextBlock", "text": title, "wrap": True, "weight": "Bolder"},
+                {
+                    "type": "FactSet",
+                    "facts": [
+                        {"title": "學校", "value": school},
+                        {"title": "命中關鍵字", "value": ", ".join(keywords) if keywords else "N/A"},
+                    ],
+                },
+            ],
+        }
+
+        if url:
+            item["items"].append({
+                "type": "ActionSet",
+                "actions": [{"type": "Action.OpenUrl", "title": "查看公告", "url": url}],
+            })
+
+        body.append(item)
+
+    card = {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": body,
+    }
+
+    payload = {
+        "type": "message",
+        "attachments": [
+            {
+                "contentType": "application/vnd.microsoft.card.adaptive",
+                "content": card,
+            }
+        ],
+    }
+
+    try:
+        resp = requests.post(
+            webhook_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=15,
+        )
+
+        # Power Automate Workflows webhook 成功時通常回 202，而非舊版 connector 的 200/204
+        if resp.status_code in (200, 202, 204):
+            logger.info(f"✅ Teams 通知已發送（{len(announcements)} 則公告彙整成一張卡片）")
+            return True
+        else:
+            logger.error(f"❌ Teams 發送失敗 (HTTP {resp.status_code}): {resp.text}")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Teams 發送錯誤: {e}")
+        return False
+
+
 def send_email(announcements: List[Dict]) -> bool:
     """
     透過 Email (Gmail SMTP) 發送通知
@@ -171,6 +265,7 @@ def notify_all(announcements: List[Dict]) -> Dict[str, bool]:
     if announcements:
         results["discord"] = send_discord(announcements)
         results["email"] = send_email(announcements)
+        results["teams"] = send_teams(announcements)
     else:
         logger.info("沒有需要通知的公告")
 
