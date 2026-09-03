@@ -54,31 +54,51 @@ def index():
     return render_template("index.html")
 
 
-@app.route("/api/check", methods=["POST"])
-def api_check():
-    """手動觸發檢查的 API"""
+def _perform_check(dry_run: bool, force: bool) -> dict:
+    """執行一次檢查並更新全域狀態；若已有檢查進行中則丟出 RuntimeError。
+    供 /api/check 與排程 job 共用，確保兩者共用同一把鎖。"""
     global _is_checking, _last_result
 
-    if _is_checking:
-        return jsonify({"error": "檢查正在進行中，請稍候..."}), 429
-
-    data = request.get_json(silent=True) or {}
-    dry_run = data.get("dry_run", True)  # Web 預設 dry-run
-    force = data.get("force", True)  # Web 預設顯示所有
-
     with _check_lock:
+        if _is_checking:
+            raise RuntimeError("檢查正在進行中，請稍候...")
         _is_checking = True
 
     try:
         result = run(dry_run=dry_run, force=force)
         _last_result = _serialize_result(result)
-        return jsonify(_last_result)
-    except Exception as e:
-        logger.error(f"手動檢查失敗: {e}", exc_info=True)
-        return jsonify({"error": str(e), "status": "error"}), 500
+        return _last_result
     finally:
         with _check_lock:
             _is_checking = False
+
+
+@app.route("/api/check", methods=["POST"])
+def api_check():
+    """手動觸發檢查的 API"""
+    data = request.get_json(silent=True) or {}
+    dry_run = data.get("dry_run", True)  # Web 預設 dry-run
+    force = data.get("force", True)  # Web 預設顯示所有
+
+    try:
+        result = _perform_check(dry_run=dry_run, force=force)
+        return jsonify(result)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 429
+    except Exception as e:
+        logger.error(f"手動檢查失敗: {e}", exc_info=True)
+        return jsonify({"error": str(e), "status": "error"}), 500
+
+
+def run_scheduled_check():
+    """供 server.py 的 APScheduler job 呼叫：正式執行（非 dry-run，不忽略歷史紀錄）"""
+    try:
+        result = _perform_check(dry_run=False, force=False)
+        logger.info(f"⏰ 排程檢查完成: {result.get('message', '')}")
+    except RuntimeError as e:
+        logger.warning(f"⏰ 排程檢查略過（已有檢查在進行中）: {e}")
+    except Exception as e:
+        logger.error(f"⏰ 排程檢查失敗: {e}", exc_info=True)
 
 
 @app.route("/api/status")
