@@ -10,7 +10,7 @@
 - 💬 **Discord 通知** - 精美的 Embed 格式推送
 - 📧 **Email 通知** - HTML 格式的美觀郵件
 - 👥 **Teams 通知** - 透過 Power Automate Workflows Webhook 推送 Adaptive Card，多則公告會彙整成一張卡片，不洗版
-- ⏰ **定時排程** - 透過本地 Docker + crontab 排程執行（詳見「本地 Docker + crontab 部署」）
+- ⏰ **定時排程** - 容器內建排程（APScheduler），週一至週五台北時間 12:00 自動執行一次（詳見「Docker 常駐服務部署」）
 - 💾 **去重機制** - 不會重複通知相同的公告
 
 ## 🏫 監控學校
@@ -75,7 +75,7 @@ docker compose run --rm --entrypoint python notifier test_teams_webhook.py
 
 ### 6️⃣ 部署排程
 
-排程執行已改由本地 Docker + crontab 負責（詳見下方「🐳 本地 Docker + crontab 部署」），GitHub Actions 只保留 `workflow_dispatch` 供手動測試，不會自動排程執行。
+排程執行已內建於容器中（詳見下方「🐳 Docker 常駐服務部署」），GitHub Actions 只保留 `workflow_dispatch` 供手動測試，不會自動排程執行。
 
 ## 🖥️ 本地開發
 
@@ -106,9 +106,9 @@ python main.py
 python main.py --force
 ```
 
-## 🐳 本地 Docker + crontab 部署
+## 🐳 Docker 常駐服務部署
 
-排程已從 GitHub Actions 的 `schedule` 觸發改為本地伺服器的 Docker + crontab，`data/`（去重紀錄）與 `docs/`（儀表板結果）以 volume 掛載，`.env` 內的密鑰不會寫進 image。
+容器啟動後會常駐執行：內建排程（週一至週五台北時間 12:00 自動檢查一次）+ 網頁手動觸發介面（http://localhost:5000）。容器時區已透過 Dockerfile 固定為 Asia/Taipei，與主機時區無關。`data/`（去重紀錄）以 volume 掛載，`.env` 內的密鑰不會寫進 image。
 
 ```bash
 # 建立 .env（同「本地開發」章節）
@@ -117,25 +117,25 @@ cp .env.example .env
 # 建置 image
 docker compose build
 
-# 手動測試（乾跑模式）
-docker compose run --rm notifier --dry-run
+# 啟動常駐服務（背景執行，關閉終端機也會持續運作）
+docker compose up -d
 
-# 手動測試（正式發送）
-docker compose run --rm notifier
+# 查看即時 log
+docker compose logs -f notifier
+
+# 停止服務
+docker compose down
 ```
 
-排程請在本地伺服器的 crontab 加入一行，指向 `scripts/cron_run.sh`（會依序執行 `main.py`、`generate_results.py`，並在 `docs/results.json` 有變動時用主機既有的 git 設定 commit + push 更新 GitHub Pages 儀表板）：
+啟動後開啟 http://localhost:5000，點擊「🔍 立即檢查」即可手動觸發一次檢查（網頁未設驗證機制，僅建議在信任的內網環境開放存取）。
+
+若只想做一次性測試、不啟動常駐服務，仍可用舊有方式：
 
 ```bash
-crontab -e
+docker compose run --rm notifier --dry-run   # 乾跑模式
+docker compose run --rm notifier --force     # 強制通知所有匹配公告
+docker compose run --rm notifier             # 正式執行一次
 ```
-
-```cron
-# 每天台北時間中午 12:00 執行一次（主機時區若非 Asia/Taipei 請自行換算）
-0 12 * * * /path/to/school-badminton-notifier/scripts/cron_run.sh >> /path/to/school-badminton-notifier/logs/cron.log 2>&1
-```
-
-> 需先確認本地伺服器已能以既有的 git 帳號/憑證對此 repo 執行 `git push`（`cron_run.sh` 不在容器內處理 git 憑證）。
 
 ## 📁 專案結構
 
@@ -144,19 +144,21 @@ school-badminton-notifier/
 ├── .github/
 │   └── workflows/
 │       └── check.yml          # GitHub Actions 設定（僅 workflow_dispatch 手動測試）
-├── scripts/
-│   └── cron_run.sh            # 本地 crontab 進入點
 ├── data/
 │   └── notified.json          # 已通知紀錄（自動產生）
 ├── docs/
 │   └── results.json           # GitHub Pages 儀表板資料（自動產生）
-├── Dockerfile                  # 容器化設定
-├── docker-compose.yml          # 本地部署用 compose 設定
+├── templates/
+│   └── index.html             # 手動觸發網頁
+├── Dockerfile                  # 容器化設定（含台北時區）
+├── docker-compose.yml          # 常駐服務用 compose 設定
 ├── .dockerignore
 ├── .env.example               # 環境變數範本
 ├── .gitignore
 ├── config.py                  # 組態設定
-├── main.py                    # 主程式入口
+├── server.py                  # 容器進入點：常駐排程+Web服務／一次性 CLI 模式
+├── main.py                    # 核心流程：main.run() / CLI 入口
+├── web.py                     # Flask 手動觸發介面（/api/check, /api/status）
 ├── scrapers.py                # 爬蟲模組（支援 RSS/API/HTML）
 ├── notifier.py                # 通知模組（Discord/Email/Teams）
 ├── storage.py                 # 去重紀錄儲存模組
@@ -192,15 +194,13 @@ school-badminton-notifier/
 ### Q: 為什麼沒有收到通知？
 1. 確認 Discord/Teams Webhook URL 是否正確
 2. Teams 通知可以用 `docker compose run --rm --entrypoint python notifier test_teams_webhook.py` 單獨測試，繞過爬蟲/關鍵字比對；若 HTTP 回應成功但 Teams 沒收到卡片，要到 Power Automate 該 flow 的「執行歷程記錄 (Run history)」查看實際錯誤（HTTP 200/202 只代表觸發程序有收到，不保證後續動作成功）
-3. 檢查本地 crontab 的 log（`scripts/cron_run.sh` 導出的檔案，例如 `logs/cron.log`），或手動用 `docker compose run --rm notifier` 查看即時輸出
+3. 檢查容器 log：`docker compose logs -f notifier`，或手動用 `docker compose run --rm notifier` 查看即時輸出
 4. 用 `--dry-run` 模式測試是否能爬到公告
 
 ### Q: 如何修改檢查頻率？
-編輯本地伺服器 crontab 中呼叫 `scripts/cron_run.sh` 那一行的排程時間，例如：
-```cron
-0 * * * *      # 每小時
-*/30 * * * *   # 每 30 分鐘
-*/15 * * * *   # 每 15 分鐘
+編輯 `server.py` 中 `CronTrigger(day_of_week="mon-fri", hour=12, minute=0, ...)` 的參數（例如改成每小時、或改變執行的星期），然後重新建置並重啟：
+```bash
+docker compose up -d --build
 ```
 
 ### Q: 學校網站改版了怎麼辦？
