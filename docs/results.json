@@ -1,15 +1,107 @@
 {
-  "timestamp": "2026-06-08 08:48:13",
-  "keywords": [],
+  "timestamp": "2026-09-03 17:13:54",
+  "keywords": [
+    "場地",
+    "租用",
+    "羽球",
+    "羽毛球",
+    "球場",
+    "體育館租借",
+    "活動中心"
+  ],
   "school_count": 14,
-  "total_fetched": 840,
-  "after_date_filter": 580,
-  "keyword_matched": 0,
-  "new_announcements": [],
-  "all_matched": [],
-  "notify_results": {},
+  "total_fetched": 849,
+  "after_date_filter": 505,
+  "keyword_matched": 4,
+  "new_announcements": [
+    {
+      "title": "本校115年第四季羽球場地租借申請將於9月16日(三)下午2:00公開抽籤",
+      "url": "https://www.yhes.tp.edu.tw/nss/main/freeze/5a9759adef37531ea27bf1b0/Cq0o5XU2162/6a9637a8b337dc40b8610ffa?vector=private&static=false",
+      "school": "台北市玉成國小",
+      "date": "2026-09-01",
+      "matched_keywords": [
+        "場地",
+        "羽球",
+        "球場"
+      ]
+    },
+    {
+      "title": "115年10-12月第四季場地租借",
+      "url": "https://www.shes.tp.edu.tw/nss/main/freeze/5abf2d62aa93092cee58ceb4/OtqYfPY1530242779495/6a8bcb2420c4a421c8fb39f4?vector=private&static=false",
+      "school": "台北市新湖國小",
+      "date": "2026-08-24",
+      "matched_keywords": [
+        "場地"
+      ]
+    },
+    {
+      "title": "公告本校115年9月至116年2月「活動中心地下室停車位」租用抽籤結果及繳費方式",
+      "url": "https://www.shes.tp.edu.tw/nss/main/freeze/5abf2d62aa93092cee58ceb4/OtqYfPY1530242779495/6a7d9b6e604836681817797e?vector=private&static=false",
+      "school": "台北市新湖國小",
+      "date": "2026-08-13",
+      "matched_keywords": [
+        "租用",
+        "活動中心"
+      ]
+    },
+    {
+      "title": "校園戶外場地暫停開放公告",
+      "url": "https://www.ctps.tp.edu.tw/nss/main/freeze/5abf2d62aa93092cee58ceb4/150pFjE7175/6a912c756d22f13c65bc52e4?vector=private&static=false",
+      "school": "台北市成德國小",
+      "date": "2026-08-28",
+      "matched_keywords": [
+        "場地"
+      ]
+    }
+  ],
+  "all_matched": [
+    {
+      "title": "本校115年第四季羽球場地租借申請將於9月16日(三)下午2:00公開抽籤",
+      "url": "https://www.yhes.tp.edu.tw/nss/main/freeze/5a9759adef37531ea27bf1b0/Cq0o5XU2162/6a9637a8b337dc40b8610ffa?vector=private&static=false",
+      "school": "台北市玉成國小",
+      "date": "2026-09-01",
+      "matched_keywords": [
+        "場地",
+        "羽球",
+        "球場"
+      ]
+    },
+    {
+      "title": "115年10-12月第四季場地租借",
+      "url": "https://www.shes.tp.edu.tw/nss/main/freeze/5abf2d62aa93092cee58ceb4/OtqYfPY1530242779495/6a8bcb2420c4a421c8fb39f4?vector=private&static=false",
+      "school": "台北市新湖國小",
+      "date": "2026-08-24",
+      "matched_keywords": [
+        "場地"
+      ]
+    },
+    {
+      "title": "公告本校115年9月至116年2月「活動中心地下室停車位」租用抽籤結果及繳費方式",
+      "url": "https://www.shes.tp.edu.tw/nss/main/freeze/5abf2d62aa93092cee58ceb4/OtqYfPY1530242779495/6a7d9b6e604836681817797e?vector=private&static=false",
+      "school": "台北市新湖國小",
+      "date": "2026-08-13",
+      "matched_keywords": [
+        "租用",
+        "活動中心"
+      ]
+    },
+    {
+      "title": "校園戶外場地暫停開放公告",
+      "url": "https://www.ctps.tp.edu.tw/nss/main/freeze/5abf2d62aa93092cee58ceb4/150pFjE7175/6a912c756d22f13c65bc52e4?vector=private&static=false",
+      "school": "台北市成德國小",
+      "date": "2026-08-28",
+      "matched_keywords": [
+        "場地"
+      ]
+    }
+  ],
+  "notify_results": {
+    "discord": true,
+    "email": false,
+    "teams": false
+  },
   "status": "success",
-  "message": "本次沒有匹配到羽球場地相關公告",
+  "message": "已發送 4 則通知",
   "dry_run": false,
   "force": true
 }
